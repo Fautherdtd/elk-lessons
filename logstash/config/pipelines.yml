@@ -1,0 +1,5 @@
+--- 
+- 
+  path.config: /usr/share/logstash/pipeline/sync-posts.conf
+  pipeline.id: sync-posts-pipeline
+  pipeline.workers: 2

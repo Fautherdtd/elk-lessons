@@ -1,0 +1,77 @@
+version: '3.8'
+
+networks:
+  elkcustom:
+    driver: bridge
+
+services:
+  postgres:
+    restart: always
+    image: postgres:latest
+    networks:
+      - elkcustom
+    volumes:
+    - ./.docker/database/postgres/data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=123
+    ports:
+      - 5436:5432
+
+  migrate:
+    restart: on-failure
+    image: migrate/migrate
+    depends_on:
+      - postgres
+    networks:
+      - elkcustom
+    volumes:
+      - ./migrations:/migrations
+    command: ["-path", "/migrations", "-database",  "postgres://postgres:123@postgres:5432/postgres?sslmode=disable", "up"]
+    links: 
+      - postgres
+
+  elasticsearch:
+    build:
+      context: elasticsearch/
+    volumes:
+      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - ./.docker/storage/elasticsearch:/usr/share/elasticsearch/data
+    environment:
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment:
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+    networks:
+      - elkcustom
+
+  logstash:
+    build:
+      context: logstash/
+    env_file: .env
+    environment:
+      LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+    volumes:
+      - ./logstash/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml
+      - ./logstash/pipeline/sync-posts.conf:/usr/share/logstash/pipeline/sync-posts.conf
+      - ./logstash/queries/sync-posts.sql:/usr/share/logstash/config/queries/sync-posts.sql
+    depends_on:
+      - postgres
+      - elasticsearch
+    ports:
+      - 5000:5000
+    networks:
+      - elkcustom
+
+  kibana:
+    build:
+      context: kibana/
+    volumes:
+      - ./kibana/config/:/usr/share/kibana/config:ro
+    ports:
+      - 5601:5601
+    depends_on:
+      - elasticsearch
+    networks:
+      - elkcustom
